@@ -10,24 +10,40 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+)
+
+var (
+	htmlflag = flag.Bool("web", false, "scrape web")
 )
 
 func main() {
-	s, err := readAll()
+	flag.Parse()
+	var (
+		ropes []rope
+		err   error
+	)
+
+	if *htmlflag {
+		ropes, err = MainHTML()
+	} else {
+		ropes, err = MainText()
+	}
 	if err != nil {
 		exit(err.Error())
 	}
-	fmt.Println("read from clipboard")
-	out, err := Main(strings.NewReader(s))
-	if err != nil {
-		exit(err.Error())
-	}
-	err = writeAll(out)
+
+	err = writeAll(toCSV(ropes))
 	if err != nil {
 		exit(err.Error())
 	}
@@ -40,35 +56,23 @@ type rope struct {
 	price    float64
 }
 
-func Main(r io.Reader) (string, error) {
-	ropes, err := parse(r)
+func MainText() ([]rope, error) {
+	s, err := readAll()
 	if err != nil {
-		exit("%v", err)
+		return nil, err
 	}
+	fmt.Println("read from clipboard")
 
-	out := &bytes.Buffer{}
-	w := csv.NewWriter(out)
-	w.Write([]string{"ID", "Name", "Len (ft)", "Price ($)"})
-	for _, rope := range ropes {
-		w.Write([]string{
-			rope.id,
-			rope.name,
-			fmt.Sprintf("%d", rope.lenFeet),
-			fmt.Sprintf("%.2f", rope.price),
-		})
-	}
-	w.Flush()
-
-	return out.String(), nil
+	return parseText(s)
 }
 
 var trim = strings.TrimSpace
 
-func parse(r io.Reader) ([]rope, error) {
+func parseText(s string) ([]rope, error) {
 	ropes := []rope{}
 	more := false
 
-	scanner := bufio.NewScanner(r)
+	scanner := bufio.NewScanner(strings.NewReader(s))
 	for i := 1; scanner.Scan(); i++ {
 		line := trim(scanner.Text())
 
@@ -125,6 +129,139 @@ func parse(r io.Reader) ([]rope, error) {
 	}
 
 	return ropes, nil
+}
+
+func MainHTML() ([]rope, error) {
+	page := 1
+	ropes := []rope{}
+
+	for true {
+		r, err := getHTML(page)
+		if err != nil {
+			return nil, err
+		}
+		doc, err := html.Parse(r)
+		if err != nil {
+			return nil, err
+		}
+		_ropes, more := parseHTML(doc)
+		fmt.Printf("scraped page %d, got %d ropes\n", page, len(_ropes))
+		ropes = append(ropes, _ropes...)
+		if !more {
+			break
+		}
+		page++
+	}
+	return ropes, nil
+}
+
+func parseHTML(doc *html.Node) ([]rope, bool) {
+	ropes := []rope{}
+	more := false
+
+	for n := range doc.Descendants() {
+		if elementHasClass(n, atom.Ul, "productGrid") {
+			for n := range n.ChildNodes() {
+				if n.Type != html.ElementNode || n.DataAtom != atom.Li {
+					continue
+				}
+
+				rope := rope{}
+				for n := range n.Descendants() {
+					if elementHasClass(n, atom.H4, "card-title") {
+						s := getInnerText(n)
+						s = strings.TrimPrefix(s, "Clearance Rope: ")
+						parts := strings.SplitN(s, "' ", 2)
+						lenFt, _ := strconv.Atoi(parts[0])
+						name := parts[1]
+
+						rope.name = name
+						rope.lenFeet = lenFt
+					}
+
+					// the price--main class appears multiple times, sometimes w/out text
+					if rope.price == 0 && elementHasClass(n, atom.Span, "price--main") {
+						s := getInnerText(n)
+						s = strings.TrimPrefix(s, "$")
+						f, _ := strconv.ParseFloat(s, 64)
+						rope.price = f
+					}
+
+					if elementHasClass(n, atom.Div, "card-text--sku") {
+						rope.id = getInnerText(n)
+					}
+				}
+				ropes = append(ropes, rope)
+			}
+		}
+
+		if elementHasClass(n, atom.Li, "pagination-item--next") {
+			more = true
+		}
+	}
+
+	return ropes, more
+}
+
+func elementHasClass(n *html.Node, atom atom.Atom, className string) bool {
+	if n.Type == html.ElementNode && n.DataAtom == atom {
+		for _, a := range n.Attr {
+			if a.Key == "class" {
+				for _, s := range strings.Split(a.Val, " ") {
+					if s == className {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+var allSpaces = regexp.MustCompile(`\s+`)
+
+func getInnerText(n *html.Node) string {
+	txt := ""
+	for n := range n.Descendants() {
+		if n.Type == html.TextNode {
+			s := trim(n.Data)
+			if s == "" {
+				continue
+			}
+			txt += " " + allSpaces.ReplaceAllString(s, " ")
+		}
+	}
+	return trim(txt)
+}
+
+func getHTML(page int) (io.ReadCloser, error) {
+	url := fmt.Sprintf("https://www.wesspur.com/specials/clearance-rope?limit=10&mode=4&page=%d", page)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("could not get page %d: %v", page, err)
+	}
+	if code := resp.StatusCode; code != 200 {
+		return nil, fmt.Errorf("got non-200 getting page %d: %d", page, code)
+	}
+	return resp.Body, nil
+}
+
+func toCSV(ropes []rope) string {
+	out := &bytes.Buffer{}
+	w := csv.NewWriter(out)
+	w.Write([]string{"ID", "Name", "Len (ft)", "Price ($)"})
+	for _, rope := range ropes {
+		w.Write([]string{
+			rope.id,
+			rope.name,
+			fmt.Sprintf("%d", rope.lenFeet),
+			fmt.Sprintf("%.2f", rope.price),
+		})
+	}
+	w.Flush()
+
+	return out.String()
 }
 
 func exit(format string, args ...any) {
