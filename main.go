@@ -144,7 +144,7 @@ func MainHTML() ([]rope, error) {
 		if err != nil {
 			return nil, err
 		}
-		_ropes, more := parseHTML(doc)
+		_ropes, more := parseProducts(doc)
 		fmt.Printf("scraped page %d, got %d ropes\n", page, len(_ropes))
 		ropes = append(ropes, _ropes...)
 		if !more {
@@ -155,10 +155,7 @@ func MainHTML() ([]rope, error) {
 	return ropes, nil
 }
 
-func parseHTML(doc *html.Node) ([]rope, bool) {
-	ropes := []rope{}
-	more := false
-
+func parseProducts(doc *html.Node) (ropes []rope, more bool) {
 	for n := range doc.Descendants() {
 		switch {
 		case elementHasClass(n, atom.Ul, "productGrid"):
@@ -238,7 +235,7 @@ func getInnerText(n *html.Node) string {
 }
 
 func getHTML(page int) (io.ReadCloser, error) {
-	url := fmt.Sprintf("https://www.wesspur.com/specials/clearance-rope?limit=10&mode=4&page=%d", page)
+	url := fmt.Sprintf("https://www.wesspur.com/specials/clearance-rope?limit=100&mode=4&page=%d", page)
 
 	resp, err := http.Get(url)
 	if err != nil {

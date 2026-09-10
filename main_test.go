@@ -94,7 +94,7 @@ func TestParseHTML(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ropes, more := parseHTML(doc)
+			ropes, more := parseProducts(doc)
 
 			if more != tc.more {
 				t.Errorf("got more=%v; want %v", more, tc.more)
