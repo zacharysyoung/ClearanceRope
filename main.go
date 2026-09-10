@@ -51,9 +51,9 @@ func main() {
 }
 
 type rope struct {
-	id, name string
-	lenFeet  int
-	price    float64
+	sku, name string
+	lenFeet   int
+	price     float64
 }
 
 func MainText() ([]rope, error) {
@@ -113,15 +113,15 @@ func parseText(s string) ([]rope, error) {
 			return nil, fmt.Errorf("could not parse price: %v", err)
 		}
 
-		// Product ID
+		// Product SKU
 		more = scanner.Scan()
 		if !more {
-			return nil, fmt.Errorf("scanning rope %d, line 4: no id", i)
+			return nil, fmt.Errorf("scanning rope %d, line 4: no SKU", i)
 		}
-		id := trim(scanner.Text())
+		sku := trim(scanner.Text())
 
 		ropes = append(ropes, rope{
-			id:      id,
+			sku:     sku,
 			name:    name,
 			lenFeet: len,
 			price:   price,
@@ -160,47 +160,50 @@ func parseHTML(doc *html.Node) ([]rope, bool) {
 	more := false
 
 	for n := range doc.Descendants() {
-		if elementHasClass(n, atom.Ul, "productGrid") {
+		switch {
+		case elementHasClass(n, atom.Ul, "productGrid"):
 			for n := range n.ChildNodes() {
-				if n.Type != html.ElementNode || n.DataAtom != atom.Li {
-					continue
+				if n.Type == html.ElementNode && n.DataAtom == atom.Li {
+					rope := scrapeRope(n)
+					ropes = append(ropes, rope)
 				}
-
-				rope := rope{}
-				for n := range n.Descendants() {
-					if elementHasClass(n, atom.H4, "card-title") {
-						s := getInnerText(n)
-						s = strings.TrimPrefix(s, "Clearance Rope: ")
-						parts := strings.SplitN(s, "' ", 2)
-						lenFt, _ := strconv.Atoi(parts[0])
-						name := parts[1]
-
-						rope.name = name
-						rope.lenFeet = lenFt
-					}
-
-					// the price--main class appears multiple times, sometimes w/out text
-					if rope.price == 0 && elementHasClass(n, atom.Span, "price--main") {
-						s := getInnerText(n)
-						s = strings.TrimPrefix(s, "$")
-						f, _ := strconv.ParseFloat(s, 64)
-						rope.price = f
-					}
-
-					if elementHasClass(n, atom.Div, "card-text--sku") {
-						rope.id = getInnerText(n)
-					}
-				}
-				ropes = append(ropes, rope)
 			}
-		}
-
-		if elementHasClass(n, atom.Li, "pagination-item--next") {
+		case elementHasClass(n, atom.Li, "pagination-item--next"):
 			more = true
 		}
 	}
 
 	return ropes, more
+}
+
+func scrapeRope(n *html.Node) rope {
+	rope := rope{}
+	for n := range n.Descendants() {
+		if elementHasClass(n, atom.H4, "card-title") {
+			s := getInnerText(n)
+			s = strings.TrimPrefix(s, "Clearance Rope: ")
+			parts := strings.SplitN(s, "' ", 2)
+			lenFt, _ := strconv.Atoi(parts[0])
+			name := parts[1]
+
+			rope.name = name
+			rope.lenFeet = lenFt
+		}
+
+		// the price--main class appears multiple times,
+		// sometimes w/out actual price text
+		if elementHasClass(n, atom.Span, "price--main") && rope.price == 0 {
+			s := getInnerText(n)
+			s = strings.TrimPrefix(s, "$")
+			f, _ := strconv.ParseFloat(s, 64)
+			rope.price = f
+		}
+
+		if elementHasClass(n, atom.Div, "card-text--sku") {
+			rope.sku = getInnerText(n)
+		}
+	}
+	return rope
 }
 
 func elementHasClass(n *html.Node, atom atom.Atom, className string) bool {
@@ -250,10 +253,10 @@ func getHTML(page int) (io.ReadCloser, error) {
 func toCSV(ropes []rope) string {
 	out := &bytes.Buffer{}
 	w := csv.NewWriter(out)
-	w.Write([]string{"ID", "Name", "Len (ft)", "Price ($)"})
+	w.Write([]string{"SKU", "Name", "Len (ft)", "Price ($)"})
 	for _, rope := range ropes {
 		w.Write([]string{
-			rope.id,
+			rope.sku,
 			rope.name,
 			fmt.Sprintf("%d", rope.lenFeet),
 			fmt.Sprintf("%.2f", rope.price),
