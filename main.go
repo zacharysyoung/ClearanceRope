@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -24,7 +25,8 @@ import (
 )
 
 var (
-	htmlflag = flag.Bool("web", false, "scrape web")
+	webflag   = flag.Bool("web", false, "scrape web")
+	printflag = flag.Bool("print", false, "print CSV instead of copying to clipboard")
 )
 
 func main() {
@@ -34,7 +36,7 @@ func main() {
 		err   error
 	)
 
-	if *htmlflag {
+	if *webflag {
 		ropes, err = MainHTML()
 	} else {
 		ropes, err = MainText()
@@ -43,17 +45,28 @@ func main() {
 		exit(err.Error())
 	}
 
-	err = writeAll(toCSV(ropes))
-	if err != nil {
-		exit(err.Error())
+	sort.Slice(ropes, func(i, j int) bool {
+		return ropes[i].lenFeet < ropes[j].lenFeet
+	})
+
+	s := toCSV(ropes)
+	switch *printflag {
+	case true:
+		fmt.Println(s)
+	default:
+		err = writeAll(s)
+		if err != nil {
+			exit(err.Error())
+		}
+		fmt.Println("wrote to clipboard")
 	}
-	fmt.Println("wrote to clipboard")
 }
 
 type rope struct {
-	sku, name string
-	lenFeet   int
-	price     float64
+	sku, name  string
+	lenFeet    int
+	diameterMM float64
+	price      float64
 }
 
 func MainText() ([]rope, error) {
@@ -145,7 +158,7 @@ func MainHTML() ([]rope, error) {
 			return nil, err
 		}
 		_ropes, more := parseProducts(doc)
-		fmt.Printf("scraped page %d, got %d ropes\n", page, len(_ropes))
+		fmt.Fprintf(os.Stderr, "scraped page %d, got %d ropes\n", page, len(_ropes))
 		ropes = append(ropes, _ropes...)
 		if !more {
 			break
@@ -178,13 +191,10 @@ func scrapeRope(n *html.Node) rope {
 	for n := range n.Descendants() {
 		if elementHasClass(n, atom.H4, "card-title") {
 			s := getInnerText(n)
-			s = strings.TrimPrefix(s, "Clearance Rope: ")
-			parts := strings.SplitN(s, "' ", 2)
-			lenFt, _ := strconv.Atoi(parts[0])
-			name := parts[1]
-
+			name, lenFt, diameterMM := parseProductName(s)
 			rope.name = name
 			rope.lenFeet = lenFt
+			rope.diameterMM = diameterMM
 		}
 
 		// the price--main class appears multiple times,
@@ -201,6 +211,71 @@ func scrapeRope(n *html.Node) rope {
 		}
 	}
 	return rope
+}
+
+// Parse a product name like `Clearance Rope: 99' Samson Stable Braid SamsonDry 12mm (1/2\")`
+// into "Samson Stable Braid SamsonDry", 99, 12.0.
+func parseProductName(s string) (name string, lenFt int, diameterMM float64) {
+	s = strings.TrimPrefix(s, "Clearance Rope: ")
+	parts := strings.Split(s, " ")
+
+	{
+		s := parts[0]
+		s = strings.TrimSuffix(s, "'")
+		lenFt, _ = strconv.Atoi(s)
+		parts = parts[1:]
+	}
+
+	i := 0
+	part := ""
+	hasDiameter := false
+PartsLoop:
+	for i, part = range parts {
+		switch {
+		case strings.HasSuffix(part, "mm"),
+			strings.HasSuffix(part, "("),
+			strings.HasSuffix(part, `"`):
+			hasDiameter = true
+			break PartsLoop
+		}
+	}
+
+	if !hasDiameter {
+		name = strings.Join(parts, " ")
+		return
+	}
+
+	name = strings.Join(parts[:i], " ")
+	parts = parts[i:]
+
+	if strings.HasSuffix(parts[0], "mm") {
+		s := strings.TrimSuffix(parts[0], "mm")
+		diameterMM, _ = strconv.ParseFloat(s, 64)
+		if i < (len(parts) - 1) {
+			parts = parts[i+1:]
+		}
+	}
+
+	if diameterMM == 0 &&
+		(strings.HasPrefix(parts[0], "(") || strings.HasSuffix(parts[0], `"`)) {
+		conversion := map[string]float64{
+			`3/8"`:  9,
+			`1/2"`:  12,
+			`9/16"`: 14,
+			`5/8"`:  16,
+			`3/4"`:  19,
+			`1"`:    24,
+		}
+
+		s := strings.TrimSuffix(strings.TrimPrefix(parts[0], "("), ")")
+		diameterMM = conversion[s]
+
+		if diameterMM == 0 {
+			fmt.Println("could not find conversion for ", s)
+		}
+	}
+
+	return
 }
 
 func elementHasClass(n *html.Node, atom atom.Atom, className string) bool {
@@ -250,13 +325,14 @@ func getHTML(page int) (io.ReadCloser, error) {
 func toCSV(ropes []rope) string {
 	out := &bytes.Buffer{}
 	w := csv.NewWriter(out)
-	w.Write([]string{"SKU", "Name", "Len (ft)", "Price ($)"})
+	w.Write([]string{"Name", "Len (ft)", "Diameter (mm)", "Price ($)", "SKU"})
 	for _, rope := range ropes {
 		w.Write([]string{
-			rope.sku,
 			rope.name,
 			fmt.Sprintf("%d", rope.lenFeet),
+			fmt.Sprintf("%g", rope.diameterMM),
 			fmt.Sprintf("%.2f", rope.price),
+			rope.sku,
 		})
 	}
 	w.Flush()

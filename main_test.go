@@ -35,8 +35,8 @@ func TestParseText(t *testing.T) {
 	}
 
 	want := []rope{
-		{"CLXR26-402", "Tree Guard - 14mm, 5% Stretch", 9, 6.30},
-		{"CLXR26-457", "Samson Pro-Master 12mm (1/2\")", 21, 8.38},
+		{"CLXR26-402", "Tree Guard - 14mm, 5% Stretch", 9, 0, 6.30},
+		{"CLXR26-457", "Samson Pro-Master 12mm (1/2\")", 21, 0, 8.38},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v; want %v", got, want)
@@ -55,16 +55,18 @@ func TestParseHTML(t *testing.T) {
 			"testdata/first.html",
 			[]rope{
 				{
-					name:    "Samson Stable Braid SamsonDry 12mm (1/2\")",
-					lenFeet: 99,
-					price:   99.00,
-					sku:     "CLXR26-480",
+					name:       "Samson Stable Braid SamsonDry",
+					lenFeet:    99,
+					diameterMM: 12,
+					price:      99.00,
+					sku:        "CLXR26-480",
 				},
 				{
-					name:    "Yale Prism 11.7mm",
-					lenFeet: 63,
-					price:   64.01,
-					sku:     "CLXR26-478",
+					name:       "Yale Prism",
+					lenFeet:    63,
+					diameterMM: 11.7,
+					price:      64.01,
+					sku:        "CLXR26-478",
 				},
 			},
 			true,
@@ -74,10 +76,11 @@ func TestParseHTML(t *testing.T) {
 			"testdata/last.html",
 			[]rope{
 				{
-					name:    "Arbor Plex 5/8\"",
-					lenFeet: 47,
-					price:   36.65,
-					sku:     "CLXR-181",
+					name:       "Arbor Plex",
+					lenFeet:    47,
+					diameterMM: 16,
+					price:      36.65,
+					sku:        "CLXR-181",
 				},
 			},
 			false,
@@ -105,4 +108,59 @@ func TestParseHTML(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseProductName(t *testing.T) {
+	testCases := []struct {
+		productName string
+
+		name       string
+		lenFt      int
+		diameterMM float64
+	}{
+		{
+			"Clearance Rope: 2' Foo Bar",
+			"Foo Bar",
+			2,
+			0,
+		},
+		{
+			`10' Rope Master 5/8"`,
+			"Rope Master",
+			10,
+			16,
+		},
+		{
+			`20' Strong Stuff 11mm`,
+			"Strong Stuff",
+			20,
+			11,
+		},
+		// 2" ignored because explicit MM
+		{
+			`30' Hang in there 12mm (2")`,
+			"Hang in there",
+			30,
+			12,
+		},
+		// 0mm because 2" not listed in conversion
+		{
+			`40' Never gonna break 2"`,
+			"Never gonna break",
+			40,
+			0,
+		},
+	}
+
+	for _, tc := range testCases {
+		name, lenFt, diameterMM := parseProductName(tc.productName)
+		if name != tc.name || lenFt != tc.lenFt || diameterMM != tc.diameterMM {
+			t.Errorf("for %s got name=%s, lenFt=%d, diameterMM=%g; want name=%s, lenFt=%d, diameterMM=%g",
+				tc.productName,
+				name, lenFt, diameterMM,
+				tc.name, tc.lenFt, tc.diameterMM,
+			)
+		}
+	}
+
 }
