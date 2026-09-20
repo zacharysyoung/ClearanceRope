@@ -1,3 +1,3 @@
 # ClearanceRope
 
-Parse the list of clearance ropes from WesSpur.com. The web-scraping parser is more complete than the clipboard parser.
+Parse the list of clearance ropes from WesSpur.com and output as CSV, either by copying all the text from the Clearance Rope web page in the browser (⌘A ⌘C), or by passing the -web flag to scrape their HTML.

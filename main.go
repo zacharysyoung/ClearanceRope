@@ -30,6 +30,11 @@ var (
 )
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Parse the list of clearance ropes from WesSpur.com and output as CSV, either by copying all the text from the Clearance Rope web page in the browser (⌘A ⌘C), or by passing the -web flag to scrape their HTML.")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	var (
 		ropes []rope
@@ -58,7 +63,7 @@ func main() {
 		if err != nil {
 			exit(err.Error())
 		}
-		fmt.Println("wrote to clipboard")
+		fmt.Println("wrote CSV to clipboard")
 	}
 }
 
@@ -93,17 +98,7 @@ func parseText(s string) ([]rope, error) {
 			continue
 		}
 
-		// Description, e.g., Clearance Rope: 9' Tree Guard - 14mm, 5% Stretch
-		line = trim(strings.TrimPrefix(line, "Clearance Rope:"))
-		parts := strings.SplitN(line, "'", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("parsing rope %d, line 2: no feet designator \"'\" in %q", i, line)
-		}
-		len, err := strconv.Atoi(trim(parts[0]))
-		if err != nil {
-			return nil, fmt.Errorf("could not parse length: %v", err)
-		}
-		name := trim(parts[1])
+		name, lenFt, diameterMM := parseProductName(line)
 
 		// Duplicate description, discard
 		more = scanner.Scan()
@@ -134,10 +129,11 @@ func parseText(s string) ([]rope, error) {
 		sku := trim(scanner.Text())
 
 		ropes = append(ropes, rope{
-			sku:     sku,
-			name:    name,
-			lenFeet: len,
-			price:   price,
+			sku:        sku,
+			name:       name,
+			lenFeet:    lenFt,
+			diameterMM: diameterMM,
+			price:      price,
 		})
 	}
 

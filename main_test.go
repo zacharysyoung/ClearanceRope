@@ -8,35 +8,19 @@ import (
 	"golang.org/x/net/html"
 )
 
-const in = `
-Sort By:
-Price: Ascending
-
-Products Per Page:
-100
-
-Columns: 1 2 3 4 6
-Clearance Rope: 9' Tree Guard - 14mm, 5% Stretch
-Clearance Rope: 9' Tree Guard - 14mm, 5% Stretch
-Our Price $6.30
-CLXR26-402
-Clearance Rope: 21' Samson Pro-Master 12mm (1/2")
-Clearance Rope: 21' Samson Pro-Master 12mm (1/2")
-Our Price $8.38
-CLXR26-457
-New Clearance Ropes Added Weekly!
-Check back often for new deals on clearance rope. We only ever have 1 of each length, and it's first-come, first-served! Clearance rope is non-returnable.
-`
-
 func TestParseText(t *testing.T) {
-	got, err := parseText(in)
+	b, err := os.ReadFile("testdata/clipboard.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := parseText(string(b))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := []rope{
-		{"CLXR26-402", "Tree Guard - 14mm, 5% Stretch", 9, 0, 6.30},
-		{"CLXR26-457", "Samson Pro-Master 12mm (1/2\")", 21, 0, 8.38},
+		{"CLXR26-402", "Tree Guard, 5% Stretch", 9, 14, 6.30},
+		{"CLXR26-457", "Samson Pro-Master", 21, 12, 8.38},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v; want %v", got, want)
