@@ -38,14 +38,15 @@ Go to https://www.wesspur.com/specials/clearance-rope and do a Select All then a
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
 	var (
 		ropes []rope
 		err   error
 	)
-
-	if *webflag {
+	switch *webflag {
+	case true:
 		ropes, err = MainHTML()
-	} else {
+	default:
 		ropes, err = MainText()
 	}
 	if err != nil {
@@ -56,12 +57,12 @@ Go to https://www.wesspur.com/specials/clearance-rope and do a Select All then a
 		return ropes[i].lenFeet < ropes[j].lenFeet
 	})
 
-	s := toCSV(ropes)
+	csv := toCSV(ropes)
 	switch *printflag {
 	case true:
-		fmt.Println(s)
+		fmt.Println(csv)
 	default:
-		err = writeAll(s)
+		err = writeAll(csv)
 		if err != nil {
 			exit(err.Error())
 		}
