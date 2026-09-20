@@ -25,14 +25,16 @@ import (
 )
 
 var (
-	webflag   = flag.Bool("web", false, "scrape web")
-	printflag = flag.Bool("print", false, "print CSV instead of copying to clipboard")
+	webflag   = flag.Bool("web", false, "automatically scrape web instead of manually copying text")
+	printflag = flag.Bool("print", false, "print CSV instead of writing to clipboard")
 )
 
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		fmt.Fprintln(os.Stderr, "Parse the list of clearance ropes from WesSpur.com and output as CSV, either by copying all the text from the Clearance Rope web page in the browser (⌘A ⌘C), or by passing the -web flag to scrape their HTML.")
+		fmt.Fprintln(os.Stderr, `Parse the list of clearance ropes from WesSpur.com and output as CSV, either by copying all the text from the Clearance Rope web page in the browser (⌘A ⌘C), or by passing the -web flag to scrape their HTML.
+
+Go to https://www.wesspur.com/specials/clearance-rope and do a Select All then a Copy.`)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
