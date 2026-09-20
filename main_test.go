@@ -150,6 +150,27 @@ func TestParseProductName(t *testing.T) {
 			40,
 			0,
 		},
+		// Hyphenated diameter
+		{
+			`9' Tree Guard - 18mm, 5% Stretch`,
+			"Tree Guard, 5% Stretch",
+			9,
+			18,
+		},
+		// Diameter by whole name
+		{
+			`78' True Blue`,
+			"True Blue",
+			78,
+			12,
+		},
+		// Diameter by part of name
+		{
+			`20' Vortex Hot`,
+			"Vortex Hot",
+			20,
+			12.7,
+		},
 	}
 
 	for _, tc := range testCases {

@@ -213,12 +213,16 @@ func scrapeRope(n *html.Node) rope {
 	return rope
 }
 
+// e.g., Tree Guard - 18mm, 5% Stretch
+var reHyphenMM = regexp.MustCompile(` - (\d{1,2})mm`)
+
 // Parse a product name like `Clearance Rope: 99' Samson Stable Braid SamsonDry 12mm (1/2\")`
 // into "Samson Stable Braid SamsonDry", 99, 12.0.
 func parseProductName(s string) (name string, lenFt int, diameterMM float64) {
 	s = strings.TrimPrefix(s, "Clearance Rope: ")
 	parts := strings.Split(s, " ")
 
+	// Extract length, e.g., "7'" for 7 feet
 	{
 		s := parts[0]
 		s = strings.TrimSuffix(s, "'")
@@ -229,6 +233,14 @@ func parseProductName(s string) (name string, lenFt int, diameterMM float64) {
 	i := 0
 	part := ""
 	hasDiameter := false
+
+	if s := strings.Join(parts, " "); reHyphenMM.MatchString(s) {
+		sub := reHyphenMM.FindAllStringSubmatch(s, -1)[0][1]
+		name = reHyphenMM.ReplaceAllString(s, "")
+		diameterMM, _ = strconv.ParseFloat(sub, 64)
+		return
+	}
+
 PartsLoop:
 	for i, part = range parts {
 		switch {
@@ -242,6 +254,28 @@ PartsLoop:
 
 	if !hasDiameter {
 		name = strings.Join(parts, " ")
+
+		nameDiamter := map[string]float64{
+			"Safety Blue Hi-V": 12.7,
+			"Samson True Blue": 12,
+			"True Blue":        12,
+			"Vortex":           12.7,
+		}
+
+		// First, try by whole name
+		diameterMM = nameDiamter[name]
+		if diameterMM != 0 {
+			return
+		}
+
+		// Then, try by parts of name
+		for _, s := range parts {
+			diameterMM = nameDiamter[s]
+			if diameterMM != 0 {
+				return
+			}
+		}
+
 		return
 	}
 
