@@ -125,12 +125,6 @@ func TestParseProductName(t *testing.T) {
 			0,
 		},
 		{
-			`10' Rope Master 5/8"`,
-			"Rope Master",
-			10,
-			16,
-		},
-		{
 			`20' Strong Stuff 11mm`,
 			"Strong Stuff",
 			20,
@@ -150,21 +144,28 @@ func TestParseProductName(t *testing.T) {
 			40,
 			0,
 		},
-		// Hyphenated diameter
+		// 5/8" found in conversion
+		{
+			`10' Rope Master 5/8"`,
+			"Rope Master",
+			10,
+			16,
+		},
+		// Hyphenated diameter regexp
 		{
 			`9' Tree Guard - 18mm, 5% Stretch`,
 			"Tree Guard, 5% Stretch",
 			9,
 			18,
 		},
-		// Diameter by whole name
+		// Diameter lookup by whole name
 		{
 			`78' True Blue`,
 			"True Blue",
 			78,
 			12,
 		},
-		// Diameter by part of name
+		// Diameter lookup by part of name
 		{
 			`20' Vortex Hot`,
 			"Vortex Hot",
