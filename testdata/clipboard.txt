@@ -1,5 +1,7 @@
 // A small subset of the text added to the clipboard when the
-// user does a Select-All then Copy from their browser.
+// user does a Select-All then Copy of
+// https://www.wesspur.com/specials/clearance-rope
+// from their browser.
 
 Sort By:
 Price: Ascending
