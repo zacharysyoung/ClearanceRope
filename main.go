@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -147,6 +148,7 @@ func MainHTML() ([]rope, error) {
 	page := 1
 	ropes := []rope{}
 
+	log.Println("scraping web")
 	for true {
 		r, err := getHTML(page)
 		if err != nil {
@@ -157,7 +159,7 @@ func MainHTML() ([]rope, error) {
 			return nil, err
 		}
 		_ropes, more := parseProducts(doc)
-		fmt.Fprintf(os.Stderr, "scraped page %d, got %d ropes\n", page, len(_ropes))
+		log.Printf("scraped page %d, got %d ropes\n", page, len(_ropes))
 		ropes = append(ropes, _ropes...)
 		if !more {
 			break
